@@ -59,7 +59,6 @@ int main(int argc, char *argv[]){
     lwp_create((lwpfun)indentnum,(void*)i);
   }
 
-  lwp_set_scheduler(RoundRobin);
   lwp_start();
 
   /* wait for the other LWPs */

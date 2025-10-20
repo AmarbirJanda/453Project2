@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <string.h>
 #include "lwp.h"
 
 /* Ensure MAP_ANONYMOUS and MAP_STACK are defined */
@@ -23,13 +24,20 @@ static scheduler current_scheduler = NULL;
 static tid_t next_tid = 1;
 
 /* Forward declarations */
-static void lwp_wrap(lwpfun function, void *argument);
+static void lwp_wrap(void);
 static unsigned long *setup_stack(size_t stack_size);
 static size_t get_stack_size(void);
 
 /* Wrapper function to handle thread termination */
-static void lwp_wrap(lwpfun function, void *argument) {
+static void lwp_wrap() {
+    lwpfun function;
+    void *argument;
+
+    function = current_thread->initial_function;
+    argument = current_thread->initial_argument;
+
     function(argument);
+
     lwp_exit(0);
 }
 
@@ -50,20 +58,26 @@ static size_t get_stack_size(void) {
     struct rlimit limit;
     long page_size = sysconf(_SC_PAGE_SIZE);
     size_t stack_size;
+    const size_t MIN_STACK_SIZE = 16 * 1024 * 1024;
     
     if (getrlimit(RLIMIT_STACK, &limit) != 0) {
-        return 8 * 1024 * 1024;
+        return MIN_STACK_SIZE;
     }
     
     if (limit.rlim_cur == RLIM_INFINITY) {
-        stack_size = 8 * 1024 * 1024;
+        stack_size = MIN_STACK_SIZE;
     } else {
         stack_size = limit.rlim_cur;
     }
     
+    // Ensure stack_size is at least the min 16MB
+    if (stack_size < MIN_STACK_SIZE) {
+        stack_size = MIN_STACK_SIZE;
+    }
+
     /* Round up to page size */
     if (stack_size % page_size != 0) {
-        stack_size = ((stack_size / page_size) + 1) * page_size;
+	stack_size = ((stack_size / page_size) + 1) * page_size;
     }
     
     return stack_size;
@@ -73,7 +87,7 @@ static size_t get_stack_size(void) {
 tid_t lwp_create(lwpfun function, void *argument) {
     thread new_thread;
     size_t stack_size;
-    unsigned long *stack_top;
+    unsigned long *stack_base, *stack_top;
     
     if (current_scheduler == NULL) {
         return NO_THREAD;
@@ -91,32 +105,42 @@ tid_t lwp_create(lwpfun function, void *argument) {
         return NO_THREAD;
     }
     
+    new_thread->stack_size = stack_size;
+
     new_thread->tid = next_tid++;
-    new_thread->status = MKTERMSTAT(LWP_LIVE, 0);
+    new_thread->status = LWP_LIVE;
     new_thread->lib_one = NULL;
     new_thread->lib_two = NULL;
     new_thread->sched_one = NULL;
     new_thread->sched_two = NULL;
     new_thread->exited = NULL;
     
-    new_thread->state.fxsave = FPU_INIT;
+    //new_thread->state.fxsave = FPU_INIT;
     
-    stack_top = new_thread->stack + (stack_size / sizeof(unsigned long));
-    stack_top = (unsigned long *)((unsigned long)stack_top & ~0xFUL);
-    
-    stack_top--;
-    *stack_top = 0;
-    stack_top--;
-    *stack_top = 0;
-    
-    new_thread->state.rsp = (unsigned long)stack_top;
-    new_thread->state.rbp = (unsigned long)stack_top;
-    new_thread->state.rdi = (unsigned long)function;
-    new_thread->state.rsi = (unsigned long)argument;
+    memset(&new_thread->state.fxsave, 0, sizeof(new_thread->state.fxsave));
+
+    // calculate the address just past the end of the mmap'd stack
+    stack_base = (unsigned long *)((char *)new_thread->stack + stack_size);
+
+    // align the highest usable address down to a 16-byte boundary
+    stack_top = (unsigned long *)((unsigned long)stack_base & ~0xFUL);
     
     stack_top--;
     *stack_top = (unsigned long)lwp_wrap;
+    // stack_top--;
+    // *stack_top = 0;
+    
     new_thread->state.rsp = (unsigned long)stack_top;
+    new_thread->state.rbp = (unsigned long)stack_top;
+    // new_thread->state.rdi = (unsigned long)function;
+    // new_thread->state.rsi = (unsigned long)argument;
+    
+    new_thread->initial_function = function;
+    new_thread->initial_argument = argument;
+    
+    // stack_top--;
+    // *stack_top = (unsigned long)lwp_wrap;
+    // new_thread->state.rsp = (unsigned long)stack_top;
     
     new_thread->lib_one = thread_list;
     thread_list = new_thread;
@@ -140,7 +164,7 @@ void lwp_start(void) {
     
     original->tid = next_tid++;
     original->stack = NULL;
-    original->status = MKTERMSTAT(LWP_LIVE, 0);
+    original->status = LWP_LIVE;
     original->lib_one = thread_list;
     original->lib_two = NULL;
     original->sched_one = NULL;
@@ -179,14 +203,36 @@ void lwp_yield(void) {
 
 void lwp_exit(int status) {
     thread exiting = current_thread;
+    thread waiting;
     
     if (exiting == NULL || current_scheduler == NULL) {
         return;
     }
     
-    exiting->status = MKTERMSTAT(LWP_TERM, status);
+    exiting->status = MKTERMSTAT(status);
     current_scheduler->remove(exiting);
     
+    // check for thread waiting to reap this one
+    if (waiting_queue != NULL) {
+	// unblock the first thread in the waiting_queue
+	waiting = waiting_queue;
+	waiting_queue = waiting_queue->lib_two; // remove from waiting list
+
+	// transfer TCB of thread currently exiting to the waiting thread's exited field
+	// this is how lwp_wait() wakes up and knows which TCB to reap
+	waiting->exited = exiting;
+
+	// put waiting threaf back into the scheduler so it can run immediately
+	current_scheduler->admit(waiting);
+
+    } else {
+	// if no thread is waitinf, add exiting thread to terminated_queue
+	// so lwp_wait() can reap later
+	exiting->lib_two = terminated_queue; // lib_two used for terminated_queue
+	terminated_queue = exiting;
+    }
+
+    /*
     exiting->lib_two = terminated_queue;
     terminated_queue = exiting;
     
@@ -204,7 +250,7 @@ void lwp_exit(int status) {
         }
         
         current_scheduler->admit(waiting);
-    }
+    }*/
     
     lwp_yield();
 }
@@ -240,8 +286,7 @@ tid_t lwp_wait(int *status) {
         }
         
         if (terminated->stack != NULL) {
-            size_t stack_size = get_stack_size();
-            munmap(terminated->stack, stack_size);
+            munmap(terminated->stack, terminated->stack_size);
         }
         
         thread *list_ptr = &thread_list;
@@ -280,8 +325,7 @@ tid_t lwp_wait(int *status) {
     }
     
     if (terminated->stack != NULL) {
-        size_t stack_size = get_stack_size();
-        munmap(terminated->stack, stack_size);
+        munmap(terminated->stack, terminated->stack_size);
     }
     
     thread *list_ptr = &thread_list;

@@ -31,19 +31,24 @@ typedef void (*lwpfun)(void *);
 #define NO_THREAD 0
 
 /* Status flags */
-#define LWP_LIVE 1
-#define LWP_TERM 0
+#define LWP_LIVE	(1)
+#define LWP_TERM	(2)
 
 /* Macros for termination status */
-#define TERMOFFSET 8
-#define MKTERMSTAT(status, exitcode) (((status) << TERMOFFSET) | ((exitcode) & ((1 << TERMOFFSET) - 1)))
-#define LWPTERMINATED(status) (((status) >> TERMOFFSET) & ((1 << (sizeof(int) * 8 - TERMOFFSET)) - 1))
-#define LWPTERMSTAT(status) ((status) & ((1 << TERMOFFSET) - 1))
+#define MKTERMSTAT(exitcode)	(LWP_TERM | ((exitcode) << 8))
+#define LWPTERMINATED(s)	(((s) & 0xFF) == LWP_TERM)
+#define LWPTERMSTAT(s)		((s) >> 8)
 
 /* Thread context structure */
 typedef struct threadinfo_st {
     tid_t tid;
     unsigned long *stack;
+
+    size_t stack_size;
+
+    lwpfun initial_function;
+    void *initial_argument;
+
     rfile state;
     unsigned int status;
     struct threadinfo_st *lib_one;

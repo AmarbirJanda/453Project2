@@ -87,7 +87,7 @@ int main(int argc, char *argv[]){
   /*PLN*/set_snake_delay(1);
   #endif
 
-  start_windowing();            /* start up curses windowing */
+  // start_windowing();            /* start up curses windowing */
 
   /* Initialize Snakes */
   cnt = 0;
@@ -108,6 +108,7 @@ int main(int argc, char *argv[]){
     s[i]->lw_pid = lwp_create((lwpfun)run_hungry_snake,(void*)(s+i));
   }
 
+  lwp_set_scheduler(RoundRobin);
   lwp_start();                    
 
   for(i=0;i<cnt;i++)

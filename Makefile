@@ -18,10 +18,10 @@ clean:
 	rm -f $(OBJS) *~ TAGS
 
 snakes: randomsnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o snakes randomsnakes.o -L. -lsnakes -lLWP -lncurses
+	$(LD) $(LDFLAGS) -o snakes randomsnakes.o -L. -Wl,-Bstatic -lsnakes -Wl,-Bdynamic -lLWP -lncurses
 
 hungry: hungrysnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o hungry hungrysnakes.o -L. -lsnakes -lLWP -lncurses
+	$(LD) $(LDFLAGS) -o hungry hungrysnakes.o -L. -Wl,-Bstatic -lsnakes -Wl,-Bdynamic -lLWP -lncurses
 
 nums: numbersmain.o libLWP.a
 	$(LD) $(LDFLAGS) -o nums numbersmain.o -L. -lLWP

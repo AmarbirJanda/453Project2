@@ -11,15 +11,21 @@
  * Email:  pnico@csc.calpoly.edu
  *
  * Revision History:
- *         $Log: randomsnakes.c,v $
- *         Revision 1.5  2023-01-28 14:36:06-08  pnico
+ *         $Log: hungrysnakes.c,v $
+ *         Revision 1.7  2023-01-28 14:36:33-08  pnico
  *         Summary: lwp_create() no longer takes a size
  *
- *         Revision 1.4  2023-01-28 14:27:44-08  pnico
+ *         Revision 1.6  2023-01-28 14:27:44-08  pnico
  *         checkpointing as launched
  *
- *         Revision 1.3  2013-04-13 10:15:44-07  pnico
- *         embiggened the stack
+ *         Revision 1.5  2013-04-24 11:45:28-07  pnico
+ *         pesky longlines.
+ *
+ *         Revision 1.4  2013-04-13 06:38:58-07  pnico
+ *         doubled initial stack size
+ *
+ *         Revision 1.3  2013-04-10 11:22:27-07  pnico
+ *         turned off the gdb sleep
  *
  *         Revision 1.2  2013-04-07 12:13:43-07  pnico
  *         Changed new_lwp() to lwp_create()
@@ -56,11 +62,6 @@ int main(int argc, char *argv[]){
   int i,cnt,err;
   snake s[MAXSNAKES];
 
-  #ifdef DEBUG
-  fprintf(stderr,"pid=%d\n",getpid());
-  sleep(5);
-  #endif
-
   err = 0;
   for (i=1;i<argc;i++) {                /* check options */
     fprintf(stderr,"%s: unknown option\n",argv[i]);
@@ -71,42 +72,43 @@ int main(int argc, char *argv[]){
     fprintf(stderr," SIGINT(^C) handler calls kill_snake().\n");
     fprintf(stderr," SIGQUIT(^\\) handler calls lwp_stop().\n");
     exit(err);
-    exit(err);
   }
 
   install_handler(SIGINT, SIGINT_handler);   /* SIGINT will kill a snake */
   install_handler(SIGQUIT,SIGQUIT_handler);  /* SIGQUIT will end lwp     */
 
-  /* wait to gdb  */
-  if (getenv("WAITFORIT") ) {
-    fprintf(stderr,"This is %d (hit enter to continue)\n",getpid());
-    getchar();
-  }
+
+  /* wait to gdb
+  fprintf(stderr,"%d\n",getpid());
+  sleep(5);
+  */
+
+  #ifdef FAST_SNAKES
+  /*PLN*/set_snake_delay(1);
+  #endif
 
   start_windowing();            /* start up curses windowing */
 
   /* Initialize Snakes */
   cnt = 0;
   /* snake new_snake(int y, int x, int len, int dir, int color) ;*/
-
-  s[cnt++] = new_snake( 8,30,10, E,1);/* each starts a different color */
-  s[cnt++] = new_snake(10,30,10, E,2);
-  s[cnt++] = new_snake(12,30,10, E,3);
-  s[cnt++] = new_snake( 8,50,10, W,4);
-  s[cnt++] = new_snake(10,50,10, W,5);
-  s[cnt++] = new_snake(12,50,10, W,6);
-  s[cnt++] = new_snake( 4,40,10, S,7);
+  s[cnt++] = new_snake( 8,30,10, E,1);/* all start at color one */
+  s[cnt++] = new_snake(10,30,10, E,1);
+  s[cnt++] = new_snake(12,30,10, E,1);
+  s[cnt++] = new_snake( 8,50,10, W,1);
+  s[cnt++] = new_snake(10,50,10, W,1);
+  s[cnt++] = new_snake(12,50,10, W,1);
+  s[cnt++] = new_snake( 4,40,10, N,1);
 
   /* Draw each snake */
   draw_all_snakes();
 
   /* turn each snake loose as an individual LWP */
   for(i=0;i<cnt;i++) {
-    s[i]->lw_pid = lwp_create((lwpfun)run_snake,(void*)(s+i));
+    s[i]->lw_pid = lwp_create((lwpfun)run_hungry_snake,(void*)(s+i));
   }
 
-  lwp_set_scheduler(RoundRobin);
-  lwp_start();                     
+  lwp_start();                    
 
   for(i=0;i<cnt;i++)
     lwp_wait(NULL);
@@ -116,3 +118,4 @@ int main(int argc, char *argv[]){
   printf("Goodbye.\n");         /* Say goodbye, Gracie */
   return err;
 }
+

@@ -105,7 +105,6 @@ int main(int argc, char *argv[]){
     s[i]->lw_pid = lwp_create((lwpfun)run_snake,(void*)(s+i));
   }
 
-  lwp_set_scheduler(RoundRobin);
   lwp_start();                     
 
   for(i=0;i<cnt;i++)
