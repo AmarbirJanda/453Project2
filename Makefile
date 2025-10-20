@@ -1,26 +1,26 @@
 CC 	= gcc
 
-CFLAGS  = -Wall -g -I .
+CFLAGS  = -Wall -g -I ../include
 
 LD 	= gcc
 
-LDFLAGS  = -Wall -g 
+LDFLAGS  = -Wall -g -L../lib64
 
 PROGS	= snakes nums hungry
 
-SNAKEOBJS  = randomsnakes.o 
+SNAKEOBJS  = randomsnakes.o util.o
 
-HUNGRYOBJS = hungrysnakes.o 
+SNAKELIBS = -lPLN -lsnakes -lncurses -lrt
+
+HUNGRYOBJS = hungrysnakes.o util.o
 
 NUMOBJS    = numbersmain.o
 
 OBJS	= $(SNAKEOBJS) $(HUNGRYOBJS) $(NUMOBJS) 
 
-SRCS	= randomsnakes.c numbersmain.c hungrysnakes.c
-
-HDRS	= 
-
 EXTRACLEAN = core $(PROGS)
+
+.PHONY: all allclean clean rs hs ns
 
 all: 	$(PROGS)
 
@@ -30,26 +30,32 @@ allclean: clean
 clean:	
 	rm -f $(OBJS) *~ TAGS
 
-snakes: randomsnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o snakes randomsnakes.o -L. -lncurses -lsnakes -lLWP
+snakes: randomsnakes.o util.o ../lib64/libPLN.so ../lib64/libsnakes.so
+	$(LD) $(LDFLAGS) -o snakes randomsnakes.o util.o $(SNAKELIBS)
 
-hungry: hungrysnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o hungry hungrysnakes.o -L. -lncurses -lsnakes -lLWP
+hungry: hungrysnakes.o  util.o ../lib64/libPLN.so ../lib64/libsnakes.so
+	$(LD) $(LDFLAGS) -o hungry hungrysnakes.o util.o $(SNAKELIBS)
 
-nums: numbersmain.o libLWP.a 
-	$(LD) $(LDFLAGS) -o nums numbersmain.o -L. -lLWP
+nums: numbersmain.o  util.o ../lib64/libPLN.so 
+	$(LD) $(LDFLAGS) -o nums numbersmain.o -lPLN
 
-hungrysnakes.o: lwp.h snakes.h
+hungrysnakes.o: hungrysnakes.c ../include/lwp.h ../include/snakes.h
+	$(CC) $(CFLAGS) -c hungrysnakes.c
 
-randomsnakes.o: lwp.h snakes.h
+randomsnakes.o: randomsnakes.c ../include/lwp.h ../include/snakes.h
+	$(CC) $(CFLAGS) -c randomsnakes.c
 
-numbermain.o: lwp.h
+numbermain.o: numbersmain.c lwp.h
+	$(CC) $(CFLAGS) -c numbersmain.c
 
-libLWP.a: lwp.c rr.c util.c
-	gcc -c rr.c util.c lwp.c magic64.S 
-	ar r libLWP.a util.o lwp.o rr.o magic64.o
-	rm lwp.o
+util.o: util.c ../include/lwp.h ../include/util.h ../include/snakes.h
+	$(CC) $(CFLAGS) -c util.c
 
-submission: lwp.c rr.c util.c Makefile README
-	tar -cf project2_submission.tar lwp.c rr.c Makefile README
-	gzip project2_submission.tar
+rs: snakes
+	(export LD_LIBRARY_PATH=../lib64; ./snakes)
+
+hs: hungry
+	(export LD_LIBRARY_PATH=../lib64; ./hungry)
+
+ns: nums
+	(export LD_LIBRARY_PATH=../lib64; ./nums)
