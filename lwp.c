@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include "lwp.h"
 
-/* Ensure MAP_ANONYMOUS and MAP_STACK are defined */
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS 0x20
 #endif
@@ -14,7 +13,6 @@
 #define MAP_STACK 0x20000
 #endif
 
-/* Global variables */
 static thread current_thread = NULL;
 static thread thread_list = NULL;
 static thread terminated_queue = NULL;
@@ -22,18 +20,15 @@ static thread waiting_queue = NULL;
 static scheduler current_scheduler = NULL;
 static tid_t next_tid = 1;
 
-/* Forward declarations */
 static void lwp_wrap(lwpfun function, void *argument);
 static unsigned long *setup_stack(size_t stack_size);
 static size_t get_stack_size(void);
 
-/* Wrapper function to handle thread termination */
 static void lwp_wrap(lwpfun function, void *argument) {
     function(argument);
     lwp_exit(0);
 }
 
-/* Setup stack using mmap */
 static unsigned long *setup_stack(size_t stack_size) {
     void *stack = mmap(NULL, stack_size, 
                        PROT_READ | PROT_WRITE,
@@ -45,7 +40,6 @@ static unsigned long *setup_stack(size_t stack_size) {
     return (unsigned long *)stack;
 }
 
-/* Get current stack size */
 static size_t get_stack_size(void) {
     struct rlimit limit;
     long page_size = sysconf(_SC_PAGE_SIZE);
@@ -61,7 +55,6 @@ static size_t get_stack_size(void) {
         stack_size = limit.rlim_cur;
     }
     
-    /* Round up to page size */
     if (stack_size % page_size != 0) {
         stack_size = ((stack_size / page_size) + 1) * page_size;
     }
@@ -69,14 +62,13 @@ static size_t get_stack_size(void) {
     return stack_size;
 }
 
-/* Create a new thread */
 tid_t lwp_create(lwpfun function, void *argument) {
     thread new_thread;
     size_t stack_size;
-    unsigned long *stack_top;
+    unsigned long *sp;
     
     if (current_scheduler == NULL) {
-        return NO_THREAD;
+        lwp_set_scheduler(RoundRobin);
     }
     
     new_thread = (thread)malloc(sizeof(struct threadinfo_st));
@@ -98,25 +90,32 @@ tid_t lwp_create(lwpfun function, void *argument) {
     new_thread->sched_one = NULL;
     new_thread->sched_two = NULL;
     new_thread->exited = NULL;
-    
     new_thread->state.fxsave = FPU_INIT;
     
-    stack_top = new_thread->stack + (stack_size / sizeof(unsigned long));
-    stack_top = (unsigned long *)((unsigned long)stack_top & ~0xFUL);
+    sp = new_thread->stack + (stack_size / sizeof(unsigned long));
     
-    stack_top--;
-    *stack_top = 0;
-    stack_top--;
-    *stack_top = 0;
+    sp = (unsigned long *)((unsigned long)sp & ~0xFUL);
     
-    new_thread->state.rsp = (unsigned long)stack_top;
-    new_thread->state.rbp = (unsigned long)stack_top;
-    new_thread->state.rdi = (unsigned long)function;
+    sp -= 2;
+    sp[0] = 0;
+    sp[1] = (unsigned long)lwp_wrap;
+    
+    new_thread->state.rax = 0;
+    new_thread->state.rbx = 0;
+    new_thread->state.rcx = 0;
+    new_thread->state.rdx = 0;
     new_thread->state.rsi = (unsigned long)argument;
-    
-    stack_top--;
-    *stack_top = (unsigned long)lwp_wrap;
-    new_thread->state.rsp = (unsigned long)stack_top;
+    new_thread->state.rdi = (unsigned long)function;
+    new_thread->state.rbp = (unsigned long)sp;
+    new_thread->state.rsp = (unsigned long)sp;
+    new_thread->state.r8 = 0;
+    new_thread->state.r9 = 0;
+    new_thread->state.r10 = 0;
+    new_thread->state.r11 = 0;
+    new_thread->state.r12 = 0;
+    new_thread->state.r13 = 0;
+    new_thread->state.r14 = 0;
+    new_thread->state.r15 = 0;
     
     new_thread->lib_one = thread_list;
     thread_list = new_thread;
@@ -130,7 +129,7 @@ void lwp_start(void) {
     thread original;
     
     if (current_scheduler == NULL) {
-        return;
+        lwp_set_scheduler(RoundRobin);
     }
     
     original = (thread)malloc(sizeof(struct threadinfo_st));
@@ -156,25 +155,25 @@ void lwp_start(void) {
 }
 
 void lwp_yield(void) {
-    thread next;
-    thread old = current_thread;
+    thread next_thread;
+    thread old_thread = current_thread;
     
     if (current_scheduler == NULL) {
         return;
     }
     
-    next = current_scheduler->next();
+    next_thread = current_scheduler->next();
     
-    if (next == NULL) {
-        if (old != NULL) {
-            exit(LWPTERMSTAT(old->status));
+    if (next_thread == NULL) {
+        if (old_thread != NULL) {
+            exit(LWPTERMSTAT(old_thread->status));
         } else {
             exit(0);
         }
     }
     
-    current_thread = next;
-    swap_rfiles(&old->state, &next->state);
+    current_thread = next_thread;
+    swap_rfiles(&old_thread->state, &next_thread->state);
 }
 
 void lwp_exit(int status) {
