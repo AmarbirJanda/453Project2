@@ -1,3 +1,26 @@
+/*
+ * util:   Some utility routines (schedulers and signal handlers)
+ *         for the snake demos
+ *
+ * Author: Dr. Phillip Nico
+ *         Department of Computer Science
+ *         California Polytechnic State University
+ *         One Grand Avenue.
+ *         San Luis Obispo, CA  93407  USA
+ *
+ * Email:  pnico@csc.calpoly.edu
+ *
+ * Revision History:
+ *         $Log: util.c,v $
+ *         Revision 1.2  2023-01-28 14:27:44-08  pnico
+ *         checkpointing as launched
+ *
+ *         Revision 1.1  2013-04-02 16:39:24-07  pnico
+ *         Initial revision
+ *
+ *
+ */
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,9 +50,9 @@ void install_handler(int sig, void (*handler)(int)) {
 }
 
 /**
- * SIGINT_handler - Handle SIGINT signal (Ctrl-C)
- * Used by snake demos to kill a snake
- */
+ *  * SIGINT_handler - Handle SIGINT signal (Ctrl-C)
+ *   * Used by snake demos to kill a snake
+ *    */
 void SIGINT_handler(int sig) {
     (void)sig;  /* Unused parameter */
     /* Just return - let the program continue */
@@ -37,11 +60,12 @@ void SIGINT_handler(int sig) {
 }
 
 /**
- * SIGQUIT_handler - Handle SIGQUIT signal (Ctrl-\)
- * Used by snake demos to quit the program
- */
+ *  * SIGQUIT_handler - Handle SIGQUIT signal (Ctrl-\)
+ *   * Used by snake demos to quit the program
+ *    */
 void SIGQUIT_handler(int sig) {
     (void)sig;  /* Unused parameter */
     /* Exit the program cleanly */
     exit(0);
 }
+

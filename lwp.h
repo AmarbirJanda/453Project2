@@ -41,24 +41,23 @@ typedef void (*lwpfun)(void *);
 
 /* Thread context structure */
 typedef struct threadinfo_st {
+    rfile state;
+    
     tid_t tid;
-    unsigned long *stack;
-
-    size_t stack_size;
+    unsigned int status;
 
     lwpfun initial_function;
     void *initial_argument;
+    unsigned long *stack;
+    size_t stack_size;
 
-    rfile state;
-    unsigned int status;
     struct threadinfo_st *lib_one;
     struct threadinfo_st *lib_two;
     struct threadinfo_st *sched_one;
     struct threadinfo_st *sched_two;
     struct threadinfo_st *exited;
-} context;
+} *thread;
 
-typedef context *thread;
 
 /* Scheduler structure */
 typedef struct scheduler {

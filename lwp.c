@@ -107,6 +107,9 @@ tid_t lwp_create(lwpfun function, void *argument) {
     
     new_thread->stack_size = stack_size;
 
+    memset(&new_thread->state, 0, sizeof(new_thread->state));
+    new_thread->state.fxsave = FPU_INIT;
+
     new_thread->tid = next_tid++;
     new_thread->status = LWP_LIVE;
     new_thread->lib_one = NULL;
@@ -115,9 +118,9 @@ tid_t lwp_create(lwpfun function, void *argument) {
     new_thread->sched_two = NULL;
     new_thread->exited = NULL;
     
-    //new_thread->state.fxsave = FPU_INIT;
+    // new_thread->state.fxsave = FPU_INIT;
     
-    memset(&new_thread->state.fxsave, 0, sizeof(new_thread->state.fxsave));
+    // memset(&new_thread->state.fxsave, 0, sizeof(new_thread->state.fxsave));
 
     // calculate the address just past the end of the mmap'd stack
     stack_base = (unsigned long *)((char *)new_thread->stack + stack_size);
@@ -131,9 +134,7 @@ tid_t lwp_create(lwpfun function, void *argument) {
     // *stack_top = 0;
     
     new_thread->state.rsp = (unsigned long)stack_top;
-    new_thread->state.rbp = (unsigned long)stack_top;
-    // new_thread->state.rdi = (unsigned long)function;
-    // new_thread->state.rsi = (unsigned long)argument;
+    new_thread->state.rbp = 0;
     
     new_thread->initial_function = function;
     new_thread->initial_argument = argument;
@@ -226,14 +227,14 @@ void lwp_exit(int status) {
 	current_scheduler->admit(waiting);
 
     } else {
-	// if no thread is waitinf, add exiting thread to terminated_queue
+	// if no thread is waiting, add exiting thread to terminated_queue
 	// so lwp_wait() can reap later
 	exiting->lib_two = terminated_queue; // lib_two used for terminated_queue
 	terminated_queue = exiting;
     }
 
-    /*
-    exiting->lib_two = terminated_queue;
+    
+    /*exiting->lib_two = terminated_queue;
     terminated_queue = exiting;
     
     if (exiting->exited != NULL) {
@@ -252,7 +253,7 @@ void lwp_exit(int status) {
         current_scheduler->admit(waiting);
     }*/
     
-    lwp_yield();
+    lwp_yield(); 
 }
 
 tid_t lwp_wait(int *status) {
