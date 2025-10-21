@@ -8,6 +8,7 @@ Files Included:
 - rr.c: round-robin scheduler 
 - util.c: utility functions 
 - util.h: header for util.c
+- schedulers.h
 - README.txt
 - MakeFile
 
