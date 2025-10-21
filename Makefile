@@ -50,6 +50,6 @@ util.o: util.c lwp.h
 magic64.o: magic64.S
 	$(CC) $(CFLAGS) -c magic64.S
 
-submission: lwp.c rr.c util.c Makefile README
-	tar -cf project2_submission.tar lwp.c rr.c util.c Makefile README
+submission: lwp.c rr.c util.c lwp.h util.h schedulers.h Makefile README.txt
+	tar -cf project2_submission.tar lwp.c rr.c util.c lwp.h util.h schedulers.h Makefile README.txt
 	gzip project2_submission.tar
